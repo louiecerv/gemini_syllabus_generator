@@ -3,6 +3,15 @@ import os
 import google.generativeai as genai
 import os
 import base64
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+import markdown
+import tempfile
+from html.parser import HTMLParser
+from pdfutils import process_markdown, create_pdf
 
 MODEL_ID = "gemini-2.0-flash-exp" 
 api_key = os.getenv("GEMINI_API_KEY")
@@ -15,6 +24,7 @@ if "model" not in st.session_state:
 model = st.session_state.model
 chat = model.start_chat()
 
+ENABLE_STREAMING = True
 
 def generate_ai_response(prompt):
     """Generates a response from an AI model
@@ -25,20 +35,7 @@ def generate_ai_response(prompt):
     Returns:
     response from the AI model.
     """
-    try:
-            # Send file and prompt to Gemini API
-            response = chat.send_message(
-                [
-                    prompt
-                ]
-            )     
 
-            # Extract and display the response
-            model_response = response.text
-            return model_response
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-        return None
 
 # Function to create the prompt for the AI model
 def createprompt(course_title, reference_textbook, specific_topic):
@@ -60,7 +57,8 @@ def createprompt(course_title, reference_textbook, specific_topic):
     Use only the book {reference_textbook} as reference. Use concise phrasing and commas \
     to separate entries when you merge into a single row. Label the table with the module \
     title {specific_topic} Format the output so that all the information fit in a single \
-    row below the column headings.  Output the table exactly with the specified columns in Markdown format.
+    row below the column headings.  Output the table exactly with the specified columns in Markdown format. 
+    Do not add any additional information.
     """
     return prompt
 
@@ -93,19 +91,46 @@ def main():
         prompt = createprompt(course_title, reference_textbook, specific_topic)
 
         with st.spinner("Thinking..."):
-            response = generate_ai_response(prompt)
+            try:
+                response_placeholder = st.empty()
+                full_response = ""
+                # Send file and prompt to Gemini API
+                response = chat.send_message(
+                    [ prompt ],                 
+                    stream=ENABLE_STREAMING
+                )   
 
-            # st.write(response)
-            st.success("Response generated successfully.")
+                if ENABLE_STREAMING:
+                    # Process the response stream
+                    for chunk in response:
+                        full_response += chunk.text
+                        response_placeholder.markdown(full_response)  # Update the placeholder                    
+                else:
+                    # Extract and display the response
+                    full_response = response.text
 
-            if response:
-                st.markdown(response)
+                st.success("Response generated successfully.")
 
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+
+            if full_response != "":
                 st.write("Download the markdown file:")
-                st.markdown(download_markdown(response), unsafe_allow_html=True)
+                st.markdown(download_markdown(full_response), unsafe_allow_html=True)
+
+                table_data, paragraphs = process_markdown(full_response)
+
+                pdf_filepath = create_pdf(table_data, paragraphs)
+
+                if pdf_filepath:  # Check if PDF was generated successfully
+                    st.success("PDF generated successfully!")
+
+                with open(pdf_filepath, "rb") as f:
+                    pdf_bytes = f.read()
+                    st.download_button("Download PDF", data=pdf_bytes, file_name="landscape_table.pdf")
 
             else:
-                st.warning("No data was passed to .")
+                st.warning("No response was obtained from the AI Model.")
 
 if __name__ == "__main__":
     main()
