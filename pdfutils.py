@@ -5,89 +5,101 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
 import tempfile
 import streamlit as st
+import json
+
 
 def process_markdown(markdown_text):
+    result = []
+    lines = markdown_text.strip().splitlines()
+    title = None
     table_data = []
-    paragraphs = []
-
-    lines = markdown_text.split("\n")
-    is_table = False
-    for line in lines:
-        if "|" in line and not line.strip().startswith("---"):
-            columns = line.split("|")
-            columns = [col.strip() for col in columns if col.strip()]
-            # Check if the row is not just line separators
-            if any(col != "---" for col in columns) and not all(col == "---" for col in columns):
-                table_data.append(columns)
-                is_table = True
-        elif is_table:
-            break
-
-    if not table_data:
-        table_data = None
+    headers = []
 
     for line in lines:
-        if "|" not in line and line.strip():
-            line = line.strip()
-            if line.startswith("#"):
-                line = "<b>" + line.lstrip("#").strip() + "</b>"
-            paragraphs.append(line)
+        line = line.strip()
 
-    return table_data, paragraphs
+        if line.startswith("#"):
+            if title:
+                result.append({"title": title, "headers": headers, "table": table_data})
+            title = line.lstrip("#").strip()
+            headers = []
+            table_data = []
 
-def create_pdf(data, paragraphs, topic):
+        elif "|" in line and not headers:
+            headers = [col.strip() for col in line.split("|")]
+            headers = [h for h in headers if h]  # Remove empty headers
 
+        elif line.startswith("|---"):  # Skip separator line
+            continue
+
+        elif "|" in line and headers:
+            columns = [col.strip() for col in line.split("|")]
+            columns = [c for c in columns if c]  # Remove empty columns
+            table_data.append(columns)
+
+    if title:
+        result.append({"title": title, "headers": headers, "table": table_data})
+
+    return json.dumps(result, indent=4)
+
+def create_pdf(json_string):
+    """
+    Generate a PDF from a JSON string containing titles and tables.
+
+    Args:
+        json_string (str): JSON string containing extracted markdown data.
+
+    Returns:
+        str: Filepath of the generated PDF.
+    """
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     filepath = temp_file.name
 
-    doc = SimpleDocTemplate(filepath, pagesize=landscape(A4), rightMargin=inch, leftMargin=inch, topMargin=inch,
-                                                        bottomMargin=inch)
+    doc = SimpleDocTemplate(filepath, pagesize=landscape(A4), rightMargin=inch, leftMargin=inch, 
+                            topMargin=inch, bottomMargin=inch)
     elements = []
-
-    page_width, page_height = landscape(A4)
-    available_width = page_width - (doc.leftMargin + doc.rightMargin)
-
     styles = getSampleStyleSheet()
 
-    for index, paragraph_text in enumerate(paragraphs):
-        if index == 0 and paragraph_text.startswith("Module"):
-            paragraph = Paragraph(paragraph_text, styles['h1']) 
-        else:
-            paragraph = Paragraph(paragraph_text, styles['Normal'])
-        elements.append(paragraph)
-        elements.append(Spacer(1, 12)) 
+    try:
+        data = json.loads(json_string)
+    except json.JSONDecodeError:
+        raise ValueError("Invalid JSON string provided.")
 
-    if not data or not data[0]:
-        return filepath
+    for item in data:
+        title = item.get("title", "")
+        headers = item.get("headers", [])
+        table_data = item.get("table", [])
 
-    else:
-        num_columns = len(data[0])
-        col_widths = [available_width / num_columns] * num_columns
+        if title:
+            elements.append(Paragraph(title, styles['h1']))
+            elements.append(Spacer(1, 12))
 
-        wrapped_data = [[Paragraph(cell, styles['Normal']) for cell in row] for row in data]
+        if table_data:
+            num_columns = len(headers) if headers else 1
+            available_width = landscape(A4)[0] - (doc.leftMargin + doc.rightMargin)
+            col_widths = [available_width / num_columns] * num_columns
 
-        table = Table(wrapped_data, colWidths=col_widths)
+            # Add headers to table data
+            table_data.insert(0, headers)
 
-        style = TableStyle([
-            # Set no shading by default. To add shading, change 'None' to a color, e.g., 'colors.grey' or any other color.
-            ('BACKGROUND', (0, 0), (-1, 0), None),  # No shading on the header row
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), None),  # No shading on the body rows
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('WORDWRAP', (0, 0), (-1, -1), 'ON')
-        ])
-        table.setStyle(style)
-        elements.append(table)
+            wrapped_data = [[Paragraph(cell, styles['Normal']) for cell in row] for row in table_data]
+            
+            table = Table(wrapped_data, colWidths=col_widths, repeatRows=1)  # Set repeatRows to 1
+            style = TableStyle([
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('WORDWRAP', (0, 0), (-1, -1), 'ON')
+            ])
+            table.setStyle(style)
+            elements.append(table)
+            elements.append(Spacer(1, 12))
+    
+    footer = Paragraph("Generated using the OBE Syllabus Maker created by the WVSU AI Dev Team (c) 2025.", styles['Normal'])
+    elements.append(footer)
 
-        # Add a 0.5 inch spacer
-        elements.append(Spacer(1, 0.5 * inch))  # 0.5 inches
-
-        footer = Paragraph("Generated using the OBE Syllabus Maker created by the WVSU AI Dev Team (c) 2025.", styles['Normal'])
-        elements.append(footer)
-
-        doc.build(elements)
-        return filepath
+    doc.build(elements)
+    return filepath
