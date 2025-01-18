@@ -11,6 +11,7 @@ import json
 def process_markdown(markdown_text):
     result = []
     lines = markdown_text.strip().splitlines()
+    syllabus_title = None  # Add syllabus_title
     title = None
     table_data = []
     headers = []
@@ -18,10 +19,13 @@ def process_markdown(markdown_text):
     for line in lines:
         line = line.strip()
 
-        if line.startswith("#"):
+        if line.startswith("# ") and not syllabus_title:  # Syllabus title (only once)
+                    syllabus_title = line.lstrip("# ").strip()
+
+        elif "Module: " in line: # Section title
             if title:
-                result.append({"title": title, "headers": headers, "table": table_data})
-            title = line.lstrip("#").strip()
+                result.append({"syllabus_title": syllabus_title, "title": title, "headers": headers, "table": table_data})
+            title = line.lstrip("## ").strip()
             headers = []
             table_data = []
 
@@ -38,7 +42,7 @@ def process_markdown(markdown_text):
             table_data.append(columns)
 
     if title:
-        result.append({"title": title, "headers": headers, "table": table_data})
+        result.append({"syllabus_title": syllabus_title, "title": title, "headers": headers, "table": table_data})
 
     return json.dumps(result, indent=4)
 
@@ -64,8 +68,18 @@ def create_pdf(json_string):
         data = json.loads(json_string)
     except json.JSONDecodeError:
         raise ValueError("Invalid JSON string provided.")
+    
+    syllabus_title_added = False
 
     for item in data:
+        if not syllabus_title_added:
+            syllabus_title = item.get("syllabus_title", "")
+            if syllabus_title:
+                elements.append(Paragraph(syllabus_title, styles['h1']))
+                elements.append(Spacer(1, 12))
+                elements.append(Spacer(1, 12))
+                syllabus_title_added = True
+
         title = item.get("title", "")
         headers = item.get("headers", [])
         table_data = item.get("table", [])
@@ -84,7 +98,7 @@ def create_pdf(json_string):
 
             wrapped_data = [[Paragraph(cell, styles['Normal']) for cell in row] for row in table_data]
             
-            table = Table(wrapped_data, colWidths=col_widths, repeatRows=1)  # Set repeatRows to 1
+            table = Table(wrapped_data, colWidths=col_widths, repeatRows=1)
             style = TableStyle([
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),

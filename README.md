@@ -1,6 +1,6 @@
 ---
 title: Gemini Syllabus Generator
-emoji: 🐢
+emoji: 📚
 colorFrom: yellow
 colorTo: indigo
 sdk: streamlit

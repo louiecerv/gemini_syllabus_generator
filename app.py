@@ -151,7 +151,8 @@ def main():
 
     # Generate prompt
     if st.button("Generate"):
-        full_syllabus = ""
+        full_syllabus = f"# Syllabus for {course_title}\n\n"
+
         with st.spinner("Thinking..."):
             for item in st.session_state.item_list:
                 full_syllabus += generate_module_matrix(item)
@@ -161,7 +162,6 @@ def main():
             st.markdown(download_markdown(full_syllabus), unsafe_allow_html=True)
 
             json_string = process_markdown(full_syllabus)
-            print(f"JSON String: {json_string}")
 
             pdf_filepath = create_pdf(json_string)
 
