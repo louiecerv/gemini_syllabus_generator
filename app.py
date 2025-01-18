@@ -43,13 +43,13 @@ def createprompt(course_title, reference_textbook, specific_topic):
     prompt = f"""
     You are an expert instructor. Create a course syllabus for a course titled '{course_title}'. 
     The syllabus should focus only on the module: '{specific_topic}' 
-    and reference the textbook '{reference_textbook}'. 
+    and search the web and refer to the reference textbook '{reference_textbook}'. 
     
     Use the Outcomes-Based Education (OBE) framework and create a course design matrix. 
     A typical module takes 2 to 3 meeks to cover. 
     
     Output this matrix as a table with the following columns: Desired Learning Outcomes (DLO) - 
-    What should students be able to do after completing this module? (Use action verbs – explain, 
+    What should students be able to do after completing this module? (Give 3 to 4 DLOs. Use action verbs – explain, 
     analyze, evaluate, etc.) Course Content/Subject Matter - Specific topics within the module that 
     contribute to achieving the DLO. Textbooks/References - Relevant reading materials that support 
     the content. (Include titles and authors if possible) Outcomes-Based Teaching & Learning (OBTL) 
