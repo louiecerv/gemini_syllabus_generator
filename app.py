@@ -86,15 +86,15 @@ def main():
         )
         st.write("Programmed by Louie F. Cervantes, M.Eng.(Information Engineering).")
 
-    # Initialize session state to store the list of moldues
+    # Initialize session state to store the list of modules
     if 'item_list' not in st.session_state:
         st.session_state.item_list = []
     if 'new_item' not in st.session_state:
         st.session_state.new_item = ''
 
     # User input fields
-    course_title = st.text_input("Course Title")
-    reference_textbook = st.text_input("Reference Textbook")\
+    course_title = st.text_input("Course Title", "e.g., Information Systems")
+    reference_textbook = st.text_input("Reference Textbook", "e.g., Building Information Systems Using Machine Learning and Deep Learning")\
     
     # Create a tab for each action
     tab_add, tab_list, tab_edit = st.tabs(['Add Module', 'List of Modules', 'Edit/Delete Module'])
@@ -150,7 +150,7 @@ def main():
             return None
 
     # Generate prompt
-    if st.button("Generate"):
+    if st.button("Generate Course Syllabus"):
         full_syllabus = f"# Syllabus for {course_title}\n\n"
 
         with st.spinner("Thinking..."):
